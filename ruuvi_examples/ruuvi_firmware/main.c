@@ -31,6 +31,8 @@
 #include "nrf_gpio.h"
 #include "nrf_drv_gpiote.h"
 #include "nrf_delay.h"
+#include "ble_bulk_transfer.h"
+#include "application_service_if.h"
 
 #define NRF_LOG_MODULE_NAME "MAIN"
 #include "nrf_log.h"
@@ -108,6 +110,7 @@ static volatile uint16_t vbat = 0; //Update in interrupt after radio activity.
 static uint64_t last_battery_measurement = 0; // Timestamp of VBat update.
 static ruuvi_sensor_t data;
 static uint8_t advertisement_delay = 0; //Random, static delay to reduce collisions.
+static char send_data[] = {'M','O','V','E','D'};
 
 // Possible modes of the app
 #define RAWv1 0
@@ -116,7 +119,7 @@ static uint8_t advertisement_delay = 0; //Random, static delay to reduce collisi
 
 // Must be UINT32_T as flash storage operated in 4-byte chunks
 // Will get loaded from flash, this is default.
-static uint32_t tag_mode __attribute__ ((aligned (4))) = RAWv1;
+static uint32_t tag_mode __attribute__ ((aligned (4))) = RAWv2_FAST;
 // Rates of advertising. These must match the tag mode enum.
 static const uint16_t advertising_rates[] = {
   ADVERTISING_INTERVAL_RAW,
@@ -132,6 +135,12 @@ static const uint16_t advertising_sizes[] = {
 
 // Prototype declaration
 static void main_timer_handler(void * p_context);
+
+static void movement_detected(void* data, uint16_t length)
+{
+  NRF_LOG_INFO("Movement detected #%d!\r\n", acceleration_events);
+  ble_bulk_transfer_asynchronous(PLAINTEXT_MESSAGE, (uint8_t*) send_data, sizeof(send_data));
+}
 
 /**@brief Handler for button press.
  * Called in scheduler, out of interrupt context.
@@ -260,23 +269,23 @@ ret_code_t button_press_handler(const ruuvi_standard_message_t message)
      // Cancel reset
      app_timer_stop(reset_timer_id);
 
-     // Clear leds
-     GREEN_LED_OFF;
-     RED_LED_OFF;
-
-     // Update mode
-     tag_mode++;
-     if(tag_mode > sizeof(advertising_rates)/sizeof(advertising_rates[0])) { tag_mode = 0; }
-     app_sched_event_put (&tag_mode, sizeof(&tag_mode), change_mode);
-
-     //Enter connectable mode if allowed by configuration.
-     if(APP_GATT_PROFILE_ENABLED)
-     {
-       app_sched_event_put (NULL, 0, become_connectable);
-     }
-
-     // Schedule store mode to flash
-     app_sched_event_put (NULL, 0, store_mode);
+//     // Clear leds
+//     GREEN_LED_OFF;
+//     RED_LED_OFF;
+//
+//     // Update mode
+//     tag_mode++;
+//     if(tag_mode > sizeof(advertising_rates)/sizeof(advertising_rates[0])) { tag_mode = 0; }
+//     app_sched_event_put (&tag_mode, sizeof(&tag_mode), change_mode);
+//
+//     //Enter connectable mode if allowed by configuration.
+//     if(APP_GATT_PROFILE_ENABLED)
+//     {
+//       app_sched_event_put (NULL, 0, become_connectable);
+//     }
+//
+//     // Schedule store mode to flash
+//     app_sched_event_put (NULL, 0, store_mode);
   }
 
   debounce = millis();
@@ -438,11 +447,11 @@ ret_code_t lis2dh12_int2_handler(const ruuvi_standard_message_t message)
 {
   NRF_LOG_DEBUG("Accelerometer interrupt to pin 2\r\n");
   acceleration_events++;
-  /*
-  app_sched_event_put ((void*)(&message),
-                       sizeof(message),
-                       lis2dh12_scheduler_event_handler);
-  */
+  
+  app_sched_event_put ((void*)(&acceleration_events),
+                       sizeof(acceleration_events),
+                       movement_detected);
+  
   return NRF_SUCCESS;
 }
 
@@ -639,9 +648,15 @@ int main(void)
   bluetooth_advertising_start(); 
   NRF_LOG_INFO("Advertising started\r\n");
 
+  // Set NUS pointer
+  ble_bulk_set_nus(get_nus());
+
   // Enter main loop. Executes tasks scheduled by timers and interrupts.
   for (;;)
   {
+    // Process RX/TX NUS messages
+    ble_message_queue_process();
+
     app_sched_execute();
     // Sleep until next event.
     power_manage();
