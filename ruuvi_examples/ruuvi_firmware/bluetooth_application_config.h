@@ -32,10 +32,11 @@
  *  BLE_GAP_ADV_TYPE_ADV_NONCONN_IND  0x03   Nonconnectable, nonscannable
  */
 // Most of the time non-connectable
-#define APPLICATION_ADVERTISEMENT_TYPE 0x03
+#define APPLICATION_ADVERTISEMENT_TYPE 0x00
 
 //Set to 0 if you don't want to include GATT connectivity. Remember to adjust advertisement type
-#define APP_GATT_PROFILE_ENABLED        0
+#define APP_GATT_PROFILE_ENABLED        1
+#define APPLICATION_GATT                1
 
 // After boot or user interaction, such as button press and NFC read
 #if APP_GATT_PROFILE_ENABLED
