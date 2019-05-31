@@ -79,3 +79,4 @@ nRF5_SDK_14.*
 # SES output
 Output
 *.jlink
+*.emSession

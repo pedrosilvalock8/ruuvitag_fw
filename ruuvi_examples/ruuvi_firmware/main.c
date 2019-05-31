@@ -31,8 +31,10 @@
 #include "nrf_gpio.h"
 #include "nrf_drv_gpiote.h"
 #include "nrf_delay.h"
+
 #include "ble_bulk_transfer.h"
 #include "application_service_if.h"
+#include "ble_event_handlers.h"
 
 #define NRF_LOG_MODULE_NAME "MAIN"
 #include "nrf_log.h"
@@ -139,7 +141,12 @@ static void main_timer_handler(void * p_context);
 static void movement_detected(void* data, uint16_t length)
 {
   NRF_LOG_INFO("Movement detected #%d!\r\n", acceleration_events);
-  ble_bulk_transfer_asynchronous(PLAINTEXT_MESSAGE, (uint8_t*) send_data, sizeof(send_data));
+
+  if (is_ble_connected())
+  {
+    NRF_LOG_INFO("Send Movement data #%d!\r\n", acceleration_events);
+    ble_bulk_transfer_asynchronous(PLAINTEXT_MESSAGE, (uint8_t*) send_data, sizeof(send_data));
+  }
 }
 
 /**@brief Handler for button press.
